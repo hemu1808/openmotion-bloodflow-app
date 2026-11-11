@@ -603,6 +603,9 @@ class _LivePlotSink:
             bfi=bfi,
             bvi=bvi,
         )
+        pulse_mgr = getattr(self._connector, "_pulse_manager", None)
+        if pulse_mgr is not None and math.isfinite(bfi):
+            pulse_mgr.ingest_sample(_SIDE_NAMES[side_idx], t, bfi)
 
     def on_complete(self) -> None:
         pass
@@ -1025,6 +1028,9 @@ class MotionConnector(QObject):
     updateCheckFailed = pyqtSignal(str)      # error message
     updateProgress = pyqtSignal(str)         # human-readable progress status
 
+    # Cardiac pulse-waveform analysis (Issue #325, #481)
+    pulseSnapshot = pyqtSignal(str, "QVariantMap", arguments=["side", "payload"])
+
     def __init__(
         self,
         interface: MotionInterface,
@@ -1083,6 +1089,17 @@ class MotionConnector(QObject):
             self._audit.log("settings_store_unavailable", {
                 "path": self._settings_store.path,
             })
+
+        # Pulse-waveform analysis controller (Issue #325, #481)
+        self._pulse_manager = None
+        if not _CLINICAL_BUILD and not bool(cfg.get("clinicalMode", False)):
+            try:
+                from pulse_view import PulseViewManager
+                self._pulse_manager = PulseViewManager(
+                    emit_fn=self._emit_pulse_snapshot
+                )
+            except Exception:
+                logger.exception("Failed to initialize PulseViewManager")
 
         # Unpack operational settings from config
         self._force_laser_fail            = bool(cfg.get("forceLaserFail", False))
@@ -3737,8 +3754,58 @@ class MotionConnector(QObject):
         prev = self._current_scan_source
         self._current_scan_source = source
         self.currentScanSourceChanged.emit()
+        self._feed_pulse_manager_from_source(source)
         if prev is not None and prev is not self._live_scan_source:
             self._retire_scan_source(prev)
+
+    def _emit_pulse_snapshot(self, side: str, payload: dict) -> None:
+        self.pulseSnapshot.emit(side, payload)
+
+    @pyqtSlot()
+    def requestPulseSnapshot(self) -> None:
+        """Re-emit latest pulse analysis snapshot for left and right sides."""
+        if self._pulse_manager is not None:
+            self._pulse_manager.re_emit_snapshots()
+
+    def _feed_pulse_manager_from_source(
+        self, source: ScanDataSource | None
+    ) -> None:
+        """Feed BFI data from a bound scan source into PulseViewManager."""
+        if self._pulse_manager is None or source is None:
+            return
+        try:
+            buffers = getattr(source, "buffers", {})
+            for side in ("left", "right"):
+                buf_avg = buffers.get((side, -1, "bfi"))
+                if buf_avg is not None and getattr(buf_avg, "n", 0) > 0:
+                    t = buf_avg.t[:buf_avg.n]
+                    v = buf_avg.v[:buf_avg.n]
+                    self._pulse_manager.ingest_batch(
+                        side, t, v, force_emit=True
+                    )
+                else:
+                    cam_bufs = [
+                        buffers[(side, c, "bfi")]
+                        for c in range(8)
+                        if (side, c, "bfi") in buffers
+                        and getattr(buffers[(side, c, "bfi")], "n", 0) > 0
+                    ]
+                    if cam_bufs:
+                        min_len = min(b.n for b in cam_bufs)
+                        if min_len >= 10:
+                            t = cam_bufs[0].t[:min_len]
+                            v_matrix = np.array(
+                                [b.v[:min_len] for b in cam_bufs],
+                                dtype=np.float64,
+                            )
+                            v_mean = np.nanmean(v_matrix, axis=0)
+                            self._pulse_manager.ingest_batch(
+                                side, t, v_mean, force_emit=True
+                            )
+        except Exception:
+            logger.debug(
+                "Failed to feed pulse manager from source", exc_info=True
+            )
 
     @pyqtSlot()
     def showLiveSource(self) -> None:
@@ -4976,6 +5043,21 @@ class MotionConnector(QObject):
         # shared with the preflight signal-quality check (#510).
         self._sync_alt_scan_settings(left_camera_mask, right_camera_mask)
 
+        if self._pulse_manager is not None:
+            self._pulse_manager.reset()
+
+        pulse_sink_list = []
+        if not _CLINICAL_BUILD and not self._app_config.get(
+            "clinicalMode", False
+        ):
+            try:
+                from pulse_view import PulseSink
+                pulse_sink_list.append(
+                    PulseSink(emit_fn=self._emit_pulse_snapshot)
+                )
+            except Exception:
+                pass
+
         req = ScanRequest(
             subject_id=subject_id,
             duration_sec=duration_sec,
@@ -5027,7 +5109,7 @@ class MotionConnector(QObject):
                     light_activate_debounce=_cq_light_activate,
                     light_clear_debounce=_cq_light_clear,
                 ),
-            ],
+            ] + pulse_sink_list,
             # Async backstop (#213): if the worker aborts after start_scan
             # returned True (e.g. a critical sink dies because the scan DB
             # became unwritable past the preflight), it can't ride the return

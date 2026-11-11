@@ -276,6 +276,8 @@ runtime_hooks = ["rthook_libusb_paths.py"]
 _excludes = ["PySide6", "shiboken6", "PySide2", "PyQt5"]
 if _is_clinical:
     _excludes.append("app_updater")
+    _excludes.append("pulse_view")
+    _excludes.append("processing.pulse_analyzer")
 # Same for the engineering-mode unlock (#706): a clinical build that is not
 # the service tool leaves out the Python unlock here and its QML prompt
 # below, so it carries neither the check nor the dialog. Guarded by
@@ -302,6 +304,15 @@ _UNLOCK_QML = _norm(os.path.join("components", "EngineeringUnlockModal.qml"))
 if not _has_engineering_unlock:
     a.datas = [e for e in a.datas if _norm(e[0]) != _UNLOCK_QML]
     print(f"[spec] left {_UNLOCK_QML} out of the clinical bundle (#706)")
+
+if _is_clinical:
+    _pulse_qmls = {
+        _norm(os.path.join("components", "PulseView.qml")),
+        _norm(os.path.join("components", "PulseCanvas.qml")),
+        _norm(os.path.join("components", "PulseStatsPanel.qml")),
+    }
+    a.datas = [e for e in a.datas if _norm(e[0]) not in _pulse_qmls]
+    print(f"[spec] left pulse view QMLs out of the clinical bundle (Refs #325)")
 
 # ---------- libusb >= 1.0.30 only (#669) ----------
 # Every libusb the app ships comes from the SDK package (omotion\_vendor).

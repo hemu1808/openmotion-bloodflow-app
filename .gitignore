@@ -68,6 +68,7 @@ coverage.*
 nosetests.xml
 pytest_cache/
 .pytest_cache/
+.pytest_temp/
 test_output/
 junit/
 

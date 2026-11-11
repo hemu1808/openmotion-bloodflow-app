@@ -35,6 +35,14 @@ Rectangle {
     // free run, hides scan-settings button, and swaps in the clinical
     // plot view.
     property bool clinicalMode: MotionInterface.appConfig.clinicalMode === true
+
+    // Research-only "Pulse" viewer mode (Scan Settings → Viewer Mode, Refs #325).
+    // When on, the main content shows cardiac pulse waveforms instead of the
+    // default BFI/BVI plots. Never active in clinical mode.
+    readonly property bool pulseViewerActive:
+        !clinicalMode
+        && MotionInterface.appConfig.pulseView !== false
+        && MotionInterface.appConfig.viewerMode === "pulse"
     // In clinical mode, Start first runs a contact-quality preflight check.
     property bool clinicalStartPending: false
     // Prevent CQ callbacks from re-opening the modal. Set while a stop/cancel
@@ -298,12 +306,31 @@ Rectangle {
         // text, so the notes shortcut below worked once and then went dead
         // until the operator clicked back into the app. Hand focus back to
         // the viewer, where it starts, whenever the last modal closes.
-        onCurrentChanged: if (current === null) plotViewer.forceActiveFocus()
+        onCurrentChanged: if (current === null) {
+            if (bloodFlow.pulseViewerActive) pulseViewer.forceActiveFocus()
+            else plotViewer.forceActiveFocus()
+        }
+    }
+
+    // Pulse viewer (Research "Pulse" viewer mode, Refs #325) — fills the same area
+    // as the plot viewer, displayed instead of it when Viewer Mode is "Pulse".
+    PulseView {
+        id: pulseViewer
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        anchors.left: buttonPanel.right
+        anchors.right: parent.right
+        anchors.margins: 8
+        anchors.leftMargin: 16
+        visible: bloodFlow.pulseViewerActive
+        active: bloodFlow.pulseViewerActive
+        scanning: bloodFlow.scanning
     }
 
     // Data viewer — fills remaining space to the right of ButtonPanel.
     PlotViewer {
         id: plotViewer
+        visible: !bloodFlow.pulseViewerActive
         anchors.top: parent.top
         anchors.bottom: parent.bottom
         anchors.left: buttonPanel.right

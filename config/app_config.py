@@ -93,6 +93,8 @@ APP_CONFIG = {
     "autoScalePerPlot": False,
     "showAxisLabels": True,
     "darkMode": True,
+    "viewerMode": "default",
+    "pulseView": True,
     "max_calibration_time_sec": 600,
     "calibration_scan_duration_sec": 15,
     "test_scan_duration_sec": 5,
@@ -231,6 +233,7 @@ PREFERENCE_KEYS = frozenset({
     "autoScale", "autoScalePerPlot", "showAxisLabels",
     "bviLowPassEnabled",
     "darkMode", "liquidGlass",
+    "viewerMode", "pulseView",
     # Research data output. Persisting these is harmless in a clinical
     # build: the scan-start gate is (!clinicalMode || engineeringMode), and
     # engineeringMode is session-only.

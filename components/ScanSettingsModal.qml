@@ -557,6 +557,56 @@ Item {
                 Layout.alignment: Qt.AlignHCenter
             }
 
+            // Viewer Mode (Research-only: Default plots vs Pulse waveform, Refs #325)
+            ColumnLayout {
+                visible: MotionInterface.appConfig.clinicalMode !== true
+                Layout.fillWidth: true
+                spacing: 8
+
+                Text {
+                    text: "Viewer Mode"
+                    color: AppTheme.textSecondary
+                    font.pixelSize: 15
+                }
+
+                RowLayout {
+                    Layout.alignment: Qt.AlignHCenter
+                    spacing: 12
+
+                    Repeater {
+                        model: [["Default", "default"], ["Pulse", "pulse"]]
+                        delegate: Button {
+                            required property var modelData
+                            Layout.preferredWidth: 130
+                            Layout.preferredHeight: 34
+                            onClicked: MotionInterface.setConfig("viewerMode", modelData[1])
+                            background: Rectangle {
+                                radius: 6
+                                color: (MotionInterface.appConfig.viewerMode || "default") === modelData[1]
+                                       ? AppTheme.accentInteractive : AppTheme.bgInput
+                                border.color: AppTheme.borderSubtle; border.width: 1
+                            }
+                            contentItem: Text {
+                                text: modelData[0]
+                                color: (MotionInterface.appConfig.viewerMode || "default") === modelData[1]
+                                       ? "#FFFFFF" : AppTheme.textPrimary
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                                font.pixelSize: 14
+                            }
+                        }
+                    }
+                }
+                Text {
+                    text: (MotionInterface.appConfig.viewerMode || "default") === "pulse"
+                          ? "Main view shows real-time cardiac pulse waveforms & asymmetry."
+                          : "Main view shows the default BFI/BVI plots."
+                    color: AppTheme.textTertiary
+                    font.pixelSize: 12
+                    Layout.alignment: Qt.AlignHCenter
+                }
+            }
+
             Item { Layout.fillHeight: true }
         }
 

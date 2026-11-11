@@ -121,7 +121,14 @@ if ($Jobs -gt 0) { $args += "--jobs=$Jobs" }
 # motion_connector imports app_updater only when the compiled CLINICAL_MODE
 # is False, but Nuitka follows the import statically regardless of the
 # branch, so tell it not to; openwater.spec does the same with excludes=.
-if ($Variant -eq "clinical") { $args += "--nofollow-import-to=app_updater" }
+if ($Variant -eq "clinical") {
+    $args += "--nofollow-import-to=app_updater"
+    $args += "--nofollow-import-to=pulse_view"
+    $args += "--nofollow-import-to=processing.pulse_analyzer"
+    $args += "--noinclude-data-files=components/PulseView.qml"
+    $args += "--noinclude-data-files=components/PulseCanvas.qml"
+    $args += "--noinclude-data-files=components/PulseStatsPanel.qml"
+}
 # Nor the engineering-mode unlock (#706), unless this is the service tool:
 # the Python module (imported on the same compiled constants) and its QML
 # prompt, so a clinical bundle carries neither the check nor the dialog.
